@@ -57,6 +57,25 @@ export default async function Home() {
         </div>
       </section>
 
+      <section className="section" id="membership" style={{ paddingTop: 0 }}>
+        <div className="wrap">
+          <div className="card" style={{ maxWidth: 640, borderColor: "var(--gold)" }}>
+            <span className="badge">Club Mahj membership</span>
+            <h2 style={{ margin: "12px 0 0" }}>$50/month</h2>
+            <h3 className="gold-text" style={{ margin: "0 0 12px" }}>Monthly membership</h3>
+            <p>Membership unlocks member pricing on Club Mahj events, faster reservations, and private member-hosted tables.</p>
+            <ul style={{ paddingLeft: 20, display: "grid", gap: 6 }}>
+              <li>Member pricing is shown clearly on every event</li>
+              <li>Host a table or find member-hosted Mahjong nights</li>
+              <li>Your profile keeps reservations and table details together</li>
+            </ul>
+            <div className="cta-row">
+              <Link className="btn btn-primary" href="/join">Start membership →</Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="section" style={{ paddingTop: 0 }}>
         <div className="wrap">
           <div className="page-head" style={{ padding: "0 0 16px" }}>

@@ -8,6 +8,7 @@ export default function Footer() {
           <strong>Club Mahj</strong> · Bringing us together, one tile at a time
         </div>
         <div className="actions">
+          <Link href="/academy">Academy</Link>
           <Link href="/games">Open games</Link>
           <Link href="/ladder">Ladder</Link>
           <Link href="/join">Join</Link>

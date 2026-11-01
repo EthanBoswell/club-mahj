@@ -11,6 +11,7 @@ export default async function Nav() {
           Club Mahj
         </Link>
         <nav className="nav" aria-label="Main">
+          <Link className="link" href="/academy">Academy</Link>
           <Link className="link" href="/games">Open Games</Link>
           <Link className="link" href="/ladder">Ladder</Link>
           {user ? (

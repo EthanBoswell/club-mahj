@@ -13,6 +13,11 @@ export default function Footer() {
           <Link href="/ladder">Ladder</Link>
           <Link href="/join">Join</Link>
         </div>
+        <div className="actions">
+          <Link href="/terms">Terms</Link>
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/cancellation">Cancellation</Link>
+        </div>
       </div>
     </footer>
   );

@@ -12,6 +12,8 @@ export type Order = {
   cloverPaymentId: string | null;
   email: string | null;
   userId: string | null;
+  /** Set once the order's effect (for a membership, the extra month) has been applied. */
+  fulfilledAt: string | null;
 };
 
 export type NewOrder = Pick<Order, "productId" | "quantity" | "amountCents" | "cloverSessionId" | "email" | "userId">;
@@ -21,16 +23,22 @@ export interface OrderStore {
   findBySessionId(sessionId: string): Promise<Order | null>;
   /** Marks an order paid. Safe to call twice: a second call returns the already-paid order. */
   markPaid(sessionId: string, paymentId: string): Promise<Order | null>;
+  /** Atomically claims the right to apply an order's effect. True for exactly one caller. */
+  claimFulfillment(orderId: string): Promise<boolean>;
+  /** Gives the claim back, so a retry can apply the effect after a failure. */
+  releaseFulfillment(orderId: string): Promise<void>;
 }
 
 type Row = {
   id: string; product_id: string; quantity: number; amount_cents: number; status: OrderStatus;
   clover_session_id: string; clover_payment_id: string | null; email: string | null; user_id: string | null;
+  fulfilled_at: string | null;
 };
 
 const toOrder = (r: Row): Order => ({
   id: r.id, productId: r.product_id, quantity: r.quantity, amountCents: r.amount_cents, status: r.status,
   cloverSessionId: r.clover_session_id, cloverPaymentId: r.clover_payment_id, email: r.email, userId: r.user_id,
+  fulfilledAt: r.fulfilled_at,
 });
 
 // Uses the service-role key, which bypasses row-level security. Server-only: never import
@@ -61,6 +69,18 @@ export function getOrderStore(): OrderStore | null {
         .eq("clover_session_id", sessionId).neq("status", "paid");
       if (error) throw new Error(`orders update failed: ${error.message}`);
       return store.findBySessionId(sessionId);
+    },
+    async claimFulfillment(orderId) {
+      // The "is null" condition makes this a compare-and-set: only one caller gets a row back.
+      const { data, error } = await db.from("orders")
+        .update({ fulfilled_at: new Date().toISOString() })
+        .eq("id", orderId).is("fulfilled_at", null).select("id");
+      if (error) throw new Error(`orders claim failed: ${error.message}`);
+      return (data?.length ?? 0) > 0;
+    },
+    async releaseFulfillment(orderId) {
+      const { error } = await db.from("orders").update({ fulfilled_at: null }).eq("id", orderId);
+      if (error) throw new Error(`orders release failed: ${error.message}`);
     },
   };
   return store;

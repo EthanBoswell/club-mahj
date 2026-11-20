@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PRODUCTS, formatPrice, getProduct } from "@/lib/payments/catalog";
+import { MEMBERSHIP_PRODUCT, PRODUCTS, formatPrice, getAnyProduct, getProduct } from "@/lib/payments/catalog";
 
 describe("catalog", () => {
   // These are the prices the client gave us. If one changes, change it on purpose.
@@ -32,5 +32,14 @@ describe("catalog", () => {
   it("formats prices", () => {
     expect(formatPrice(5000)).toBe("$50");
     expect(formatPrice(12550)).toBe("$125.50");
+  });
+
+  it("sells the membership at $50 a month, separately from the Academy products", () => {
+    expect(MEMBERSHIP_PRODUCT.priceCents).toBe(5000);
+    expect(getProduct(MEMBERSHIP_PRODUCT.id)).toBeUndefined();
+    expect(PRODUCTS.some((p) => p.id === MEMBERSHIP_PRODUCT.id)).toBe(false);
+    expect(getAnyProduct(MEMBERSHIP_PRODUCT.id)).toBe(MEMBERSHIP_PRODUCT);
+    expect(getAnyProduct("mahj-101")?.priceCents).toBe(5000);
+    expect(getAnyProduct("nope")).toBeUndefined();
   });
 });

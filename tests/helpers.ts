@@ -14,7 +14,7 @@ export function fakeStore(): OrderStore & { orders: Order[] } {
   return {
     orders,
     async create(o: NewOrder) {
-      const order: Order = { id: `order-${orders.length + 1}`, status: "pending", cloverPaymentId: null, ...o };
+      const order: Order = { id: `order-${orders.length + 1}`, status: "pending", cloverPaymentId: null, fulfilledAt: null, ...o };
       orders.push(order);
       return order;
     },
@@ -25,6 +25,16 @@ export function fakeStore(): OrderStore & { orders: Order[] } {
       const o = orders.find((x) => x.cloverSessionId === id);
       if (o && o.status !== "paid") Object.assign(o, { status: "paid", cloverPaymentId: paymentId });
       return o ?? null;
+    },
+    async claimFulfillment(id) {
+      const o = orders.find((x) => x.id === id);
+      if (!o || o.fulfilledAt) return false;
+      o.fulfilledAt = "claimed";
+      return true;
+    },
+    async releaseFulfillment(id) {
+      const o = orders.find((x) => x.id === id);
+      if (o) o.fulfilledAt = null;
     },
   };
 }

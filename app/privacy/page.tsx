@@ -20,13 +20,13 @@ export default function PrivacyPage() {
           heading: "Payments",
           body: [
             "Clover handles card details and payment processing. Club Mahj does not store full card numbers in the app.",
-            "Club Mahj may store payment status, masked payment labels, Clover reference IDs, receipt metadata, and membership billing status so your account and event records stay connected.",
+            "Club Mahj may store payment status, masked payment labels, Clover reference IDs, receipt metadata, and membership payment status so your account and event records stay connected.",
           ],
         },
         {
           heading: "How We Use Information",
           body: [
-            "Club Mahj uses member information to create your account, confirm membership, manage event registrations, send event-related updates, answer support questions, and improve the app experience.",
+            "Club Mahj uses member information to create your account, confirm membership, manage event registrations, send event-related updates and membership renewal reminders, answer support questions, and improve the app experience.",
             "Admin analytics are for owner and staff review only. Members should see the public app, their own profile, their own registrations, and their own receipts.",
           ],
         },

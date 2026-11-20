@@ -31,6 +31,9 @@ export default async function AcademyPage({ searchParams }: { searchParams: Prom
           <span className="eyebrow">Club Mahj Academy</span>
           <h1><span className="gold-text">Learn to play, your way</span></h1>
           <p className="lede">Courses, private lessons and group events for every level, from your first tile to table-ready.</p>
+          {checkout === "error" && (
+            <p className="notice notice-error" role="alert">We could not start your payment just now. Please try again in a moment.</p>
+          )}
           {checkout === "unavailable" && (
             <p className="notice notice-info" role="status">Online booking is not switched on yet. Please check back soon.</p>
           )}

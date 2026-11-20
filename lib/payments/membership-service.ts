@@ -1,19 +1,13 @@
-import { MEMBERSHIP } from "./catalog";
-import { CloverError } from "./clover";
-import { hasAccess, type Membership, type MembershipStore } from "./memberships";
-import type { Recurring } from "./recurring";
+import { MEMBERSHIP_PRODUCT } from "./catalog";
+import type { Membership, MembershipStore } from "./memberships";
+import type { Order, OrderStore } from "./orders";
 
-export type Deps = {
-  store: MembershipStore;
-  clover: Recurring;
-  planId: string | undefined;
-  now?: () => Date;
-  uuid?: () => string;
-};
+/** Days after the paid month ends that a member keeps member pricing while they renew. */
+export const GRACE_DAYS = 3;
+/** How many days before the month ends the "renew soon" email goes out. */
+export const REMIND_DAYS = 5;
 
-export type SubscribeResult =
-  | { ok: true; membership: Membership; renewalsSetUp: boolean }
-  | { ok: false; code: "consent_required" | "not_configured" | "already_member" | "payment_failed" | "payment_error"; message: string };
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Adds calendar months in UTC, clamping to the end of a shorter month (Jan 31 + 1 month = Feb 28). */
 export function addMonths(date: Date, months: number): Date {
@@ -26,121 +20,111 @@ export function addMonths(date: Date, months: number): Date {
   return d;
 }
 
-/** First billing date after `now`, given the first renewal date and monthly billing. */
-export function nextBillingDate(firstRenewal: Date, now: Date): Date {
-  let k = 0;
-  let next = firstRenewal;
-  while (next <= now && k < 600) next = addMonths(firstRenewal, ++k);
-  return next;
+export type MembershipState =
+  | { kind: "none" }
+  | { kind: "active"; paidThrough: Date }
+  | { kind: "grace"; paidThrough: Date; accessUntil: Date }
+  | { kind: "expired"; paidThrough: Date };
+
+export function membershipState(m: Membership | null, now: Date): MembershipState {
+  if (!m) return { kind: "none" };
+  const paidThrough = new Date(m.paidThrough);
+  const accessUntil = new Date(paidThrough.getTime() + GRACE_DAYS * DAY_MS);
+  if (now < paidThrough) return { kind: "active", paidThrough };
+  if (now < accessUntil) return { kind: "grace", paidThrough, accessUntil };
+  return { kind: "expired", paidThrough };
+}
+
+/** Whether the member gets member pricing right now. */
+export function hasAccess(m: Membership | null, now: Date): boolean {
+  const kind = membershipState(m, now).kind;
+  return kind === "active" || kind === "grace";
 }
 
 /**
- * Charges the first month straight away (so we know it worked), then starts a monthly
- * subscription one month later for the renewals. The member's row is saved as soon as the
- * charge succeeds, so someone who has paid is never left without a record.
+ * Adds paid time. Renewing early stacks onto the current end date, and renewing during the
+ * grace period keeps the monthly rhythm. Renewing after that starts a fresh month from today.
  */
-export async function subscribeMember(
-  deps: Deps,
-  input: { userId: string; email: string; name?: string; token: string; clientIp: string; consent: boolean },
-): Promise<SubscribeResult> {
-  const now = (deps.now ?? (() => new Date()))();
-  const uuid = deps.uuid ?? (() => crypto.randomUUID());
+export function extendMembership(existing: Membership | null, userId: string, now: Date, months = 1): Membership {
+  const continues = existing && new Date(existing.paidThrough).getTime() + GRACE_DAYS * DAY_MS > now.getTime();
+  const base = continues ? new Date(existing!.paidThrough) : now;
+  return {
+    userId,
+    startedAt: existing?.startedAt ?? now.toISOString(),
+    paidThrough: addMonths(base, months).toISOString(),
+    remindersEnabled: existing?.remindersEnabled ?? true,
+    upcomingRemindedFor: existing?.upcomingRemindedFor ?? null,
+    graceRemindedFor: existing?.graceRemindedFor ?? null,
+  };
+}
 
-  if (!input.consent) return { ok: false, code: "consent_required", message: "Please agree to the monthly charge to continue." };
-  if (!deps.planId) return { ok: false, code: "not_configured", message: "Membership billing is not set up yet." };
+export type ApplyResult = "applied" | "already_applied" | "ignored";
 
-  const existing = await deps.store.get(input.userId);
-  if (hasAccess(existing, now)) return { ok: false, code: "already_member", message: "You already have an active membership." };
-
-  // A pending row keeps its idempotency key, so retrying after a timeout cannot charge twice.
-  // Any other past state gets a fresh key: reusing one would just replay the old charge.
-  let m: Membership = existing?.status === "pending"
-    ? existing
-    : {
-        userId: input.userId, status: "pending", idempotencyKey: uuid(), cloverCustomerId: null,
-        cloverSubscriptionId: null, startedAt: null, paidThrough: null, canceledAt: null, billingIssue: null,
-      };
-  await deps.store.save(m);
-
-  let charge;
+/**
+ * Called when a paid order comes in. For a membership order, adds the month. The claim makes this
+ * safe if Clover delivers the same webhook twice, and it is given back if saving fails so a
+ * retry can finish the job.
+ */
+export async function applyMembershipPayment(
+  deps: { store: MembershipStore; orders: OrderStore; now?: () => Date },
+  order: Order,
+): Promise<ApplyResult> {
+  if (order.productId !== MEMBERSHIP_PRODUCT.id || !order.userId) return "ignored";
+  if (!(await deps.orders.claimFulfillment(order.id))) return "already_applied";
   try {
-    const customer = await deps.clover.createCustomer({ email: input.email, name: input.name, source: input.token });
-    m = { ...m, cloverCustomerId: customer.id };
-    await deps.store.save(m);
-    charge = await deps.clover.createCharge({
-      amountCents: MEMBERSHIP.priceCents, customerId: customer.id, idempotencyKey: m.idempotencyKey, clientIp: input.clientIp,
-    });
+    const now = (deps.now ?? (() => new Date()))();
+    const existing = await deps.store.get(order.userId);
+    await deps.store.save(extendMembership(existing, order.userId, now));
+    return "applied";
   } catch (e) {
-    // A 4xx means Clover rejected the request outright, so a retry needs a new key.
-    // Anything else (network, 5xx) might have gone through: keep the key so a retry is safe.
-    if (e instanceof CloverError && e.status !== undefined && e.status >= 400 && e.status < 500) {
-      await deps.store.save({ ...m, idempotencyKey: uuid() });
-      return { ok: false, code: "payment_failed", message: "Your card could not be charged. Please check the details or try another card." };
-    }
-    return { ok: false, code: "payment_error", message: "We could not confirm your payment. Please wait a minute and try again." };
-  }
-
-  if (!charge.paid) {
-    await deps.store.save({ ...m, idempotencyKey: uuid() });
-    return { ok: false, code: "payment_failed", message: "Your card was declined. Please try another card." };
-  }
-
-  const firstRenewal = addMonths(now, 1);
-  m = { ...m, status: "active", startedAt: now.toISOString(), paidThrough: firstRenewal.toISOString(), billingIssue: null };
-  await deps.store.save(m);
-
-  try {
-    const sub = await deps.clover.createSubscription({ planId: deps.planId, customerId: m.cloverCustomerId!, startDate: firstRenewal.toISOString() });
-    m = { ...m, cloverSubscriptionId: sub.id };
-    await deps.store.save(m);
-    return { ok: true, membership: m, renewalsSetUp: true };
-  } catch {
-    // They have paid for the first month, so keep them active but flag that renewals need attention.
-    m = { ...m, billingIssue: "subscription_setup_failed" };
-    await deps.store.save(m);
-    return { ok: true, membership: m, renewalsSetUp: false };
+    await deps.orders.releaseFulfillment(order.id);
+    throw e;
   }
 }
 
-export type CancelResult =
-  | { ok: true; membership: Membership }
-  | { ok: false; code: "not_found" | "cancel_failed"; message: string };
+export async function setReminders(store: MembershipStore, userId: string, enabled: boolean): Promise<void> {
+  const m = await store.get(userId);
+  if (m) await store.save({ ...m, remindersEnabled: enabled });
+}
 
-/** Stops future billing. The member keeps access until the end of the month they already paid for. */
-export async function cancelMembership(deps: Deps, input: { userId: string }): Promise<CancelResult> {
+export type ReminderKind = "upcoming" | "grace";
+export type Mailer = (message: { to: string; subject: string; text: string; html: string }) => Promise<void>;
+export type ReminderTemplate = (input: { kind: ReminderKind; name?: string; paidThrough: Date; accessUntil: Date }) => { subject: string; text: string; html: string };
+
+export type ReminderSummary = { sent: number; skipped: number; failed: number };
+
+/**
+ * Emails members who are close to running out, or have just run out. Each member gets at most one
+ * "renew soon" and one "just ended" email per month. A failed send is not recorded, so the next run
+ * tries again, and one member's failure never stops the others.
+ */
+export async function runReminders(
+  deps: { store: MembershipStore; send: Mailer; template: ReminderTemplate; now?: () => Date },
+): Promise<ReminderSummary> {
   const now = (deps.now ?? (() => new Date()))();
-  const m = await deps.store.get(input.userId);
-  if (!m || m.status !== "active") return { ok: false, code: "not_found", message: "There is no active membership to cancel." };
+  const summary: ReminderSummary = { sent: 0, skipped: 0, failed: 0 };
 
-  if (m.cloverSubscriptionId) {
+  for (const m of await deps.store.list()) {
+    const state = membershipState(m, now);
+    const paidThrough = new Date(m.paidThrough);
+    const kind: ReminderKind | null =
+      state.kind === "active" && now.getTime() >= paidThrough.getTime() - REMIND_DAYS * DAY_MS && m.upcomingRemindedFor !== m.paidThrough ? "upcoming"
+      : state.kind === "grace" && m.graceRemindedFor !== m.paidThrough ? "grace"
+      : null;
+
+    if (!kind || !m.remindersEnabled) { summary.skipped++; continue; }
+
     try {
-      await deps.clover.setSubscriptionActive(m.cloverSubscriptionId, false);
+      const contact = await deps.store.contact(m.userId);
+      if (!contact) { summary.skipped++; continue; }
+      const accessUntil = new Date(paidThrough.getTime() + GRACE_DAYS * DAY_MS);
+      const email = deps.template({ kind, name: contact.name, paidThrough, accessUntil });
+      await deps.send({ to: contact.email, ...email });
+      await deps.store.save(kind === "upcoming" ? { ...m, upcomingRemindedFor: m.paidThrough } : { ...m, graceRemindedFor: m.paidThrough });
+      summary.sent++;
     } catch {
-      // Do not mark it cancelled locally if billing was not actually stopped.
-      return { ok: false, code: "cancel_failed", message: "We could not cancel your billing just now. You have not been cancelled; please try again." };
+      summary.failed++;
     }
   }
-
-  // Renewals happen monthly from the first renewal date, so access runs to the next one after today.
-  const paidThrough = m.paidThrough ? nextBillingDate(new Date(m.paidThrough), now) : now;
-  const updated: Membership = { ...m, status: "canceled", canceledAt: now.toISOString(), paidThrough: paidThrough.toISOString() };
-  await deps.store.save(updated);
-  return { ok: true, membership: updated };
-}
-
-/** Refreshes a member's status from Clover: a subscription Clover has deactivated (for example after failed renewals) means the membership lapsed. */
-export async function syncMembership(deps: Deps, userId: string): Promise<Membership | null> {
-  const m = await deps.store.get(userId);
-  if (!m || m.status !== "active" || !m.cloverSubscriptionId) return m;
-  try {
-    const sub = await deps.clover.getSubscription(m.cloverSubscriptionId);
-    if (!sub.active) {
-      const lapsed: Membership = { ...m, status: "lapsed", billingIssue: "renewal_failed" };
-      await deps.store.save(lapsed);
-      return lapsed;
-    }
-  } catch {
-    // Clover is unreachable: keep what we know rather than locking a paying member out.
-  }
-  return m;
+  return summary;
 }

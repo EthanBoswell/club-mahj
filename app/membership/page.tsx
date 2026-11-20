@@ -1,62 +1,84 @@
 import { redirect } from "next/navigation";
-import MembershipForm from "@/components/MembershipForm";
 import { getUser } from "@/lib/data";
-import { MEMBERSHIP, formatPrice } from "@/lib/payments/catalog";
+import { GRACE_DAYS, REMIND_DAYS, membershipState } from "@/lib/payments/membership-service";
+import { MEMBERSHIP_PRODUCT, formatPrice } from "@/lib/payments/catalog";
 import { cloverConfig } from "@/lib/payments/clover";
-import { membershipDeps } from "@/lib/payments/membership-deps";
-import { hasAccess } from "@/lib/payments/memberships";
-import { syncMembership } from "@/lib/payments/membership-service";
+import { getMembershipStore } from "@/lib/payments/memberships";
+import { getOrderStore } from "@/lib/payments/orders";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Membership | Club Mahj" };
 
-const fmt = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 
-export default async function MembershipPage({ searchParams }: { searchParams: Promise<{ canceled?: string; error?: string }> }) {
-  const { canceled, error } = await searchParams;
+export default async function MembershipPage({ searchParams }: { searchParams: Promise<{ checkout?: string }> }) {
+  const { checkout } = await searchParams;
   const user = await getUser();
   if (!user) redirect("/signin?returnTo=/membership");
 
-  const deps = membershipDeps();
-  const cfg = cloverConfig();
-  const publicKey = process.env.CLOVER_PUBLIC_KEY;
-  const sdkUrl = process.env.CLOVER_SDK_URL ?? "https://checkout.sandbox.dev.clover.com/sdk.js";
-  const membership = deps ? await syncMembership(deps, user.id) : null;
-  const active = hasAccess(membership, new Date());
-  const price = formatPrice(MEMBERSHIP.priceCents);
+  const store = getMembershipStore();
+  const enabled = Boolean(store && getOrderStore() && cloverConfig());
+  const membership = store ? await store.get(user.id) : null;
+  const state = membershipState(membership, new Date());
+  const price = formatPrice(MEMBERSHIP_PRODUCT.priceCents);
+
+  const renew = (label: string) => (
+    <form action="/api/membership/renew" method="post">
+      <button className="btn btn-primary" type="submit">{label}</button>
+    </form>
+  );
 
   return (
     <section className="page-head">
       <div className="narrow">
         <span className="eyebrow">Club Mahj membership</span>
         <h1><span className="gold-text">{price}/month</span></h1>
-        {canceled && <p className="notice notice-info" role="status">Your membership is cancelled. You will not be billed again.</p>}
-        {error && <p className="notice notice-error" role="alert">{error}</p>}
+        {checkout === "error" && <p className="notice notice-error" role="alert">We could not start your payment just now. Please try again in a moment.</p>}
 
-        {!deps || !cfg || !publicKey ? (
-          <p className="notice notice-info">Online membership sign-up is not switched on yet. Please check back soon.</p>
-        ) : membership?.status === "active" ? (
-          <div className="card">
-            <h3>You are a member</h3>
-            <p className="muted">Your membership renews monthly at {price}.</p>
-            {membership.billingIssue && <p className="notice notice-error">There is a problem with your billing. Please contact us.</p>}
-            <form action="/api/membership/cancel" method="post">
-              <button className="btn btn-ghost" type="submit">Cancel membership</button>
-            </form>
-          </div>
-        ) : active && membership?.paidThrough ? (
-          <div className="card">
-            <h3>Membership cancelled</h3>
-            <p className="muted">You keep your member pricing until {fmt(membership.paidThrough)}. You will not be billed again.</p>
-          </div>
+        {!enabled ? (
+          <p className="notice notice-info">Online membership payments are not switched on yet. Please check back soon.</p>
         ) : (
-          <>
-            {membership?.status === "lapsed" && (
-              <p className="notice notice-error">Your last renewal did not go through, so your membership has ended. You can rejoin below.</p>
+          <div className="card" style={{ display: "grid", gap: 12 }}>
+            {state.kind === "none" && (
+              <>
+                <p className="lede" style={{ margin: 0 }}>Member pricing on Club Mahj events, faster reservations, and private member-hosted tables.</p>
+                <p className="muted small" style={{ margin: 0 }}>Pay {price} for a month. It does not renew by itself: we email you before it ends.</p>
+                {renew(`Pay ${price} and join`)}
+              </>
             )}
-            <p className="lede">Member pricing on Club Mahj events, faster reservations, and private member-hosted tables.</p>
-            <MembershipForm publicKey={publicKey} merchantId={cfg.merchantId} sdkUrl={sdkUrl} price={price} />
-          </>
+            {state.kind === "active" && (
+              <>
+                <h3 style={{ margin: 0 }}>You are a member</h3>
+                <p style={{ margin: 0 }}>Your membership runs through <strong>{fmt(state.paidThrough)}</strong>.</p>
+                <p className="muted small" style={{ margin: 0 }}>We will email you about {REMIND_DAYS} days before it ends. Renewing early adds a month to your current end date.</p>
+                {renew(`Renew for ${price}`)}
+              </>
+            )}
+            {state.kind === "grace" && (
+              <>
+                <h3 style={{ margin: 0 }}>Time to renew</h3>
+                <p style={{ margin: 0 }}>Your month ended on {fmt(state.paidThrough)}. You keep member pricing until <strong>{fmt(state.accessUntil)}</strong> ({GRACE_DAYS} days after).</p>
+                {renew(`Renew for ${price}`)}
+              </>
+            )}
+            {state.kind === "expired" && (
+              <>
+                <h3 style={{ margin: 0 }}>Your membership has ended</h3>
+                <p style={{ margin: 0 }}>It ended on {fmt(state.paidThrough)}. You can rejoin any time.</p>
+                {renew(`Rejoin for ${price}`)}
+              </>
+            )}
+
+            {membership && (
+              <form action="/api/membership/reminders" method="post" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <label className="small" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input type="checkbox" name="enabled" defaultChecked={membership.remindersEnabled} />
+                  Email me renewal reminders
+                </label>
+                <button className="btn btn-ghost btn-sm" type="submit">Save</button>
+              </form>
+            )}
+          </div>
         )}
       </div>
     </section>

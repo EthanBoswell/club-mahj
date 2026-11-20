@@ -26,7 +26,7 @@ export default function CancellationPage() {
         {
           heading: "Payment Method",
           body: [
-            "Helcim manages the secure payment method and payment processing. Club Mahj stores safe references so membership, events, and receipts stay connected to your account.",
+            "Clover manages the secure payment method and payment processing. Club Mahj stores safe references so membership, events, and receipts stay connected to your account.",
           ],
         },
         {

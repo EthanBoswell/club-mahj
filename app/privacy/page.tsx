@@ -19,8 +19,8 @@ export default function PrivacyPage() {
         {
           heading: "Payments",
           body: [
-            "Helcim handles card details and payment processing. Club Mahj does not store full card numbers in the app.",
-            "Club Mahj may store payment status, masked payment labels, Helcim reference IDs, receipt metadata, and membership billing status so your account and event records stay connected.",
+            "Clover handles card details and payment processing. Club Mahj does not store full card numbers in the app.",
+            "Club Mahj may store payment status, masked payment labels, Clover reference IDs, receipt metadata, and membership billing status so your account and event records stay connected.",
           ],
         },
         {

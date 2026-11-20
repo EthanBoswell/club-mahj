@@ -20,7 +20,7 @@ export default function TermsPage() {
           heading: "Payments",
           body: [
             "Membership is currently listed at $50/month. Event cards show the public price and any member discount before a reservation or payment.",
-            "Helcim handles secure card collection, recurring membership billing, and payment processing. Club Mahj stores member records, payment status, receipt metadata, and payment reference IDs.",
+            "Clover handles secure card collection, recurring membership billing, and payment processing. Club Mahj stores member records, payment status, receipt metadata, and payment reference IDs.",
           ],
         },
         {

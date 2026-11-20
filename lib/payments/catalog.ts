@@ -26,3 +26,5 @@ export function getProduct(id: string): Product | undefined {
 export function formatPrice(cents: number): string {
   return Number.isInteger(cents / 100) ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`;
 }
+
+export const MEMBERSHIP = { name: "Club Mahj monthly membership", priceCents: 5000 } as const;

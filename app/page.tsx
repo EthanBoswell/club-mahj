@@ -70,7 +70,7 @@ export default async function Home() {
               <li>Your profile keeps reservations and table details together</li>
             </ul>
             <div className="cta-row">
-              <Link className="btn btn-primary" href="/join">Start membership →</Link>
+              <Link className="btn btn-primary" href="/membership">Start membership →</Link>
             </div>
           </div>
         </div>

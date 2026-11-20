@@ -1,17 +1,29 @@
 import Link from "next/link";
+import { formatPrice, getProduct } from "@/lib/payments/catalog";
 
 export const metadata = {
   title: "Club Mahj Academy | Lessons, bootcamps and girls night in",
   description: "Learn mahjong with Club Mahj Academy: Mahjong 101-103, private lessons, a 4-hour bootcamp and Mahjong & Mingle.",
 };
 
-const courses = [
-  { code: "101", price: 50 },
-  { code: "102", price: 50 },
-  { code: "103", price: 50 },
-];
+function BookButton({ id }: { id: string }) {
+  return (
+    <form action="/api/checkout" method="post">
+      <input type="hidden" name="productId" value={id} />
+      <button className="btn btn-primary btn-sm" type="submit">Book</button>
+    </form>
+  );
+}
 
-export default function AcademyPage() {
+function Price({ id, unit = "per person" }: { id: string; unit?: string }) {
+  return <p><strong>{formatPrice(getProduct(id)!.priceCents)}</strong> {unit}</p>;
+}
+
+export default async function AcademyPage({ searchParams }: { searchParams: Promise<{ checkout?: string }> }) {
+  const { checkout } = await searchParams;
+  const separate = getProduct("mahj-101")!.priceCents * 3;
+  const saving = separate - getProduct("mahj-101-103-package")!.priceCents;
+
   return (
     <>
       <section className="page-head">
@@ -19,6 +31,9 @@ export default function AcademyPage() {
           <span className="eyebrow">Club Mahj Academy</span>
           <h1><span className="gold-text">Learn to play, your way</span></h1>
           <p className="lede">Courses, private lessons and group events for every level, from your first tile to table-ready.</p>
+          {checkout === "unavailable" && (
+            <p className="notice notice-info" role="status">Online booking is not switched on yet. Please check back soon.</p>
+          )}
         </div>
       </section>
 
@@ -27,11 +42,12 @@ export default function AcademyPage() {
           <h2>Mahjong courses</h2>
           <p className="muted">Three separate 90-minute courses. Take one, or take them all.</p>
           <div className="grid grid-3">
-            {courses.map((c) => (
-              <div key={c.code} className="tile tile-pink">
-                <h3>Mahjong {c.code}</h3>
+            {["mahj-101", "mahj-102", "mahj-103"].map((id) => (
+              <div key={id} className="tile tile-pink">
+                <h3>{getProduct(id)!.name}</h3>
                 <p className="muted small">90 minutes</p>
-                <p><strong>${c.price}</strong> per person</p>
+                <Price id={id} />
+                <BookButton id={id} />
               </div>
             ))}
           </div>
@@ -39,7 +55,11 @@ export default function AcademyPage() {
             <span className="badge badge-jade">Best value</span>
             <h3>Mahj 101–103 package</h3>
             <p className="muted small">All three 90-minute courses</p>
-            <p><strong>$125</strong> per person <span className="muted small">(save $25)</span></p>
+            <p>
+              <strong>{formatPrice(getProduct("mahj-101-103-package")!.priceCents)}</strong> per person{" "}
+              <span className="muted small">(save {formatPrice(saving)})</span>
+            </p>
+            <BookButton id="mahj-101-103-package" />
           </div>
         </div>
       </section>
@@ -51,17 +71,20 @@ export default function AcademyPage() {
             <div className="tile">
               <h3>Private lessons</h3>
               <p className="muted small">One-on-one, for each course</p>
-              <p><strong>$60</strong> per course</p>
+              <Price id="private-lesson" unit="per course" />
+              <BookButton id="private-lesson" />
             </div>
             <div className="tile">
               <h3>Mahjong bootcamp</h3>
               <p className="muted small">4 hours</p>
-              <p><strong>$100</strong> per person</p>
+              <Price id="bootcamp" />
+              <BookButton id="bootcamp" />
             </div>
             <div className="tile">
               <h3>Mahjong &amp; Mingle</h3>
               <p className="muted small">3-hour girls night in (can be daytime)</p>
-              <p><strong>$75</strong> per person</p>
+              <Price id="mahj-and-mingle" />
+              <BookButton id="mahj-and-mingle" />
             </div>
           </div>
           <div className="cta-row">

@@ -8,7 +8,8 @@ let user: { id: string; email: string } | null = null;
 
 vi.mock("@/lib/payments/orders", () => ({ getOrderStore: () => store }));
 vi.mock("@/lib/data", () => ({ getUser: async () => user }));
-vi.mock("@/lib/payments/clover", () => ({
+vi.mock("@/lib/payments/clover", async () => ({
+  ...(await vi.importActual<typeof import("@/lib/payments/clover")>("@/lib/payments/clover")),
   cloverConfig: () => (configured ? { token: "t", merchantId: "m", baseUrl: "b" } : null),
   createCheckoutSession: (...a: unknown[]) => createCheckoutSession(...a),
 }));
@@ -84,7 +85,22 @@ describe("POST /api/checkout", () => {
     expect(createCheckoutSession).not.toHaveBeenCalled();
   });
 
-  it("does not record an order if Clover fails", async () => {
+  it("shows a friendly message, and records nothing, when Clover rejects or is down", async () => {
+    const { CloverError } = await import("@/lib/payments/clover");
+    createCheckoutSession.mockRejectedValue(new CloverError("down", 503));
+    const res = await post({ productId: "mahj-101" });
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("https://club.example/academy?checkout=error");
+    expect(store.orders).toHaveLength(0);
+  });
+
+  it("cannot be used to buy the membership, which has its own route", async () => {
+    const res = await post({ productId: "membership-month" });
+    expect(res.status).toBe(400);
+    expect(createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("does not record an order if something other than Clover fails", async () => {
     createCheckoutSession.mockRejectedValue(new Error("clover down"));
     await expect(post({ productId: "mahj-101" })).rejects.toThrow("clover down");
     expect(store.orders).toHaveLength(0);

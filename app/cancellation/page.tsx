@@ -12,7 +12,7 @@ export default function CancellationPage() {
         {
           heading: "Monthly Membership",
           body: [
-            "Club Mahj membership is currently $50/month and renews automatically. A member can cancel anytime before the next renewal; the current prepaid month stays active and the next monthly bill will not run.",
+            "Club Mahj membership is currently $50/month. It does not renew automatically and your card is never charged without you choosing to pay. Before your month ends we email you a link to renew. If you do not renew, your membership simply ends after a short grace period, and the month you paid for stays active until then. You can turn the reminder emails off at any time on your membership page.",
             "Member event pricing stays available during the active paid membership period. That pricing may end when the membership period ends.",
           ],
         },

@@ -19,15 +19,14 @@ export function fakeMembershipStore(initial?: Membership): MembershipStore & { r
 }
 
 export function fakeClover(over: Partial<Record<keyof Recurring, unknown>> = {}) {
-  const clover = {
+  const mocks = {
     createCustomer: vi.fn().mockResolvedValue({ id: "cust-1" }),
     createCharge: vi.fn().mockResolvedValue({ id: "ch-1", paid: true }),
     createSubscription: vi.fn().mockResolvedValue({ id: "sub-1" }),
     setSubscriptionActive: vi.fn().mockResolvedValue(undefined),
     getSubscription: vi.fn().mockResolvedValue({ active: true }),
-    ...over,
   };
-  return clover as unknown as Recurring & typeof clover;
+  return { ...mocks, ...over } as unknown as Recurring & typeof mocks;
 }
 
 export function deps(store: MembershipStore, clover: Recurring, planId: string | null = "plan-1"): Deps {

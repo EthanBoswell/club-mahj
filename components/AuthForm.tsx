@@ -30,7 +30,7 @@ export default function AuthForm({ mode, returnTo }: { mode: "join" | "signin"; 
         email,
         password,
         options: {
-          emailRedirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}`,
+          emailRedirectTo: `${(process.env.NEXT_PUBLIC_SITE_URL ?? location.origin).replace(/\/$/, "")}/auth/callback?next=${encodeURIComponent(returnTo)}`,
           data: {
             display_name: String(f.get("display_name")),
             city: String(f.get("city")),

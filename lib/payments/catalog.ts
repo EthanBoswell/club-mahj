@@ -26,3 +26,16 @@ export function getProduct(id: string): Product | undefined {
 export function formatPrice(cents: number): string {
   return Number.isInteger(cents / 100) ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`;
 }
+
+/** The monthly membership. Sold through its own route, never through the Academy checkout. */
+export const MEMBERSHIP_PRODUCT: Product = {
+  id: "membership-month",
+  name: "Club Mahj monthly membership",
+  note: "One month of membership",
+  priceCents: 5000,
+};
+
+/** Looks up anything we sell, including the membership. */
+export function getAnyProduct(id: string): Product | undefined {
+  return getProduct(id) ?? (id === MEMBERSHIP_PRODUCT.id ? MEMBERSHIP_PRODUCT : undefined);
+}

@@ -19,8 +19,8 @@ export default function TermsPage() {
         {
           heading: "Payments",
           body: [
-            "Membership is currently listed at $50/month. Event cards show the public price and any member discount before a reservation or payment.",
-            "Clover handles secure card collection, recurring membership billing, and payment processing. Club Mahj stores member records, payment status, receipt metadata, and payment reference IDs.",
+            "Membership is currently listed at $50/month. Each month is paid separately and does not renew automatically. Event cards show the public price and any member discount before a reservation or payment.",
+            "Clover handles secure card collection and payment processing. Club Mahj stores member records, payment status, receipt metadata, and payment reference IDs.",
           ],
         },
         {

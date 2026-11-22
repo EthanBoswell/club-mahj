@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getProduct } from "@/lib/payments/catalog";
+import { getAnyProduct } from "@/lib/payments/catalog";
 import { getOrderStore } from "@/lib/payments/orders";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export default async function CheckoutSuccess({ searchParams }: { searchParams: 
   const { session_id } = await searchParams;
   const store = getOrderStore();
   const order = session_id && store ? await store.findBySessionId(session_id) : null;
-  const product = order ? getProduct(order.productId) : undefined;
+  const product = order ? getAnyProduct(order.productId) : undefined;
   const confirmed = order?.status === "paid";
 
   return (

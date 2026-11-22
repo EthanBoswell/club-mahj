@@ -17,7 +17,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid quantity" }, { status: 400 });
   }
 
-  const origin = (process.env.SITE_URL ?? new URL(request.url).origin).replace(/\/$/, "");
+  // Tolerate a SITE_URL saved without its scheme (e.g. "example.com"), which would make redirects fail.
+  const configured = process.env.SITE_URL?.trim();
+  const base = configured ? (/^https?:\/\//i.test(configured) ? configured : `https://${configured}`) : new URL(request.url).origin;
+  const origin = base.replace(/\/+$/, "");
   const store = getOrderStore();
   if (!cloverConfig() || !store) {
     // Not configured (for example preview mode): send them back with a message instead of failing.
